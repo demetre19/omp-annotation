@@ -205,6 +205,7 @@ async function sendToOmp() {
   if (!activeTab?.id || !state.annotations.length) return;
   const response = await send({ type: 'OMP_ANNOTATION_SEND_TO_OMP', tabId: activeTab.id });
   if (response?.ok) {
+    chrome.tabs.sendMessage(activeTab.id, { type: 'OMP_ANNOTATION_FLASH_SENT' }).catch(() => {});
     flashButton(els.sendButton, 'Sent');
     return;
   }

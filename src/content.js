@@ -49,6 +49,11 @@
       sendResponse({ ok: true });
       return false;
     }
+    if (message?.type === 'OMP_ANNOTATION_FLASH_SENT') {
+      flashSent();
+      sendResponse({ ok: true });
+      return false;
+    }
     if (message?.type === 'OMP_ANNOTATION_DISPOSE') {
       disposeOverlay();
       sendResponse({ ok: true });
@@ -90,7 +95,14 @@
       .note textarea { all: unset; height: 18px; overflow: hidden; resize: none; padding: 1px 8px; color: #fff; font: 12px ui-sans-serif, system-ui; line-height: 18px; white-space: nowrap; }
       .note textarea::placeholder { color: #9ca3af; }
       .note-meta { display: none; }
-      .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); display: none; max-width: min(520px, calc(100vw - 32px)); padding: 10px 12px; border-radius: 12px; background: rgba(14,17,23,.95); color: #f8fafc; font: 12px ui-sans-serif, system-ui; box-shadow: 0 14px 44px rgba(0,0,0,.38); border: 1px solid rgba(255,255,255,.16); pointer-events: none; }
+      .sent-flash { position: fixed; inset: 0; background: #22c55e; opacity: 0; pointer-events: none; }
+      .sent-flash.visible { animation: sent-flash 650ms ease-in-out; }
+      @keyframes sent-flash {
+        0% { opacity: 0; }
+        18% { opacity: .1; }
+        100% { opacity: 0; }
+      }
+      .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); display: none; max-width: min(560px, calc(100vw - 32px)); padding: 12px 16px; border-radius: 12px; background: rgba(14,17,23,.95); color: #86efac; font: 700 14px ui-sans-serif, system-ui; box-shadow: 0 14px 44px rgba(0,0,0,.38); border: 1px solid rgba(34,197,94,.38); pointer-events: none; }
       .toast.visible { display: block; }
     `;
 
@@ -103,16 +115,19 @@
     const drag = document.createElement('div');
     drag.className = 'drag';
     const layer = document.createElement('div');
+    const sentFlash = document.createElement('div');
+    sentFlash.className = 'sent-flash';
     const toast = document.createElement('div');
     toast.className = 'toast';
 
-    shadow.append(style, bar, outline, drag, layer, toast);
+    shadow.append(style, bar, outline, drag, layer, sentFlash, toast);
     return {
       root,
       bar,
       outline,
       drag,
       layer,
+      sentFlash,
       toast,
       count: bar.querySelector('.count'),
       modeButtons: Array.from(bar.querySelectorAll('[data-mode]'))
@@ -438,6 +453,7 @@
       state.editingNoteId = null;
       drawAnnotations();
       updateToolbar();
+      if (response?.ok) flashSent();
       showToast(response?.ok ? 'Sent to OMP.' : (response?.error || 'Send failed.'));
     }).catch((error) => showToast(String(error?.message || error || 'Send failed.')));
   }
@@ -466,6 +482,7 @@
   function sendToOmp() {
     chrome.runtime.sendMessage({ type: 'OMP_ANNOTATION_SEND_TO_OMP' }).then((response) => {
       if (response?.ok) {
+        flashSent();
         showToast(`Sent ${response.delivered || state.annotations.length} annotation${state.annotations.length === 1 ? '' : 's'} to OMP.`);
         return;
       }
@@ -664,5 +681,14 @@
     ui.toast.classList.add('visible');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => ui.toast.classList.remove('visible'), 1600);
+  }
+
+  let flashTimer = 0;
+  function flashSent() {
+    ui.sentFlash.classList.remove('visible');
+    void ui.sentFlash.offsetWidth;
+    ui.sentFlash.classList.add('visible');
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => ui.sentFlash.classList.remove('visible'), 690);
   }
 })();

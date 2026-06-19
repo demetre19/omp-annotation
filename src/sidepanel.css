@@ -36,6 +36,7 @@ button {
   color: var(--text);
   background: var(--panel-2);
   cursor: pointer;
+  min-width: 0;
 }
 
 button:hover {
@@ -50,8 +51,11 @@ button:disabled {
 .app {
   display: grid;
   gap: 8px;
-  min-height: 100vh;
   padding: 10px;
+}
+
+.app > * {
+  min-width: 0;
 }
 
 .header,
@@ -60,6 +64,10 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.section-title {
+  padding-bottom: 4px;
 }
 
 h1,
@@ -100,6 +108,8 @@ h2 {
 }
 
 .page-card {
+  min-width: 0;
+  overflow: hidden;
   padding: 8px;
 }
 
@@ -109,6 +119,7 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 .page-url {
@@ -118,6 +129,7 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 .target-card {
@@ -153,6 +165,16 @@ h2 {
   gap: 6px;
 }
 
+.controls button {
+  width: 100%;
+}
+
+@media (max-width: 440px) {
+  .controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .primary {
   background: linear-gradient(135deg, #f59e0b, #facc15);
   color: #111827;
@@ -180,19 +202,29 @@ h2 {
 }
 
 .shortcuts {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 5px;
   color: var(--muted);
-  font-size: 10px;
-  line-height: 1.35;
+  font-size: 9px;
+  line-height: 1.2;
 }
 
 .shortcuts span {
-  padding: 4px 6px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 3px 5px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: rgba(255, 255, 255, .035);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 440px) {
+  .shortcuts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 kbd {
@@ -296,12 +328,10 @@ textarea:focus {
 }
 
 .brand-footer {
-  align-self: end;
-  margin-top: auto;
-  padding: 10px 4px 2px;
+  margin-top: 3px;
   color: var(--muted);
   font-size: 11px;
-  text-align: center;
+  line-height: 1.2;
 }
 
 .brand-footer a {

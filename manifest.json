@@ -1,0 +1,76 @@
+{
+  "manifest_version": 3,
+  "name": "OMP Annotation Panel",
+  "version": "0.1.0",
+  "description": "Annotate any website from a side panel and export structured notes for OMP.",
+  "icons": {
+    "16": "icons/pi-16.png",
+    "32": "icons/pi-32.png",
+    "48": "icons/pi-48.png",
+    "128": "icons/pi-128.png"
+  },
+  "action": {
+    "default_title": "Annotate this page",
+    "default_icon": {
+      "16": "icons/pi-16.png",
+      "32": "icons/pi-32.png",
+      "48": "icons/pi-48.png",
+      "128": "icons/pi-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel.html"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "sidePanel",
+    "storage",
+    "clipboardRead",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+O",
+        "mac": "Alt+Shift+O"
+      }
+    },
+    "toggle-annotating": {
+      "suggested_key": {
+        "default": "Alt+Shift+A",
+        "mac": "Alt+Shift+A"
+      },
+      "description": "Open the side panel and toggle annotation mode"
+    },
+    "element-mode": {
+      "suggested_key": {
+        "default": "Alt+Shift+E",
+        "mac": "Alt+Shift+E"
+      },
+      "description": "Switch to element annotation mode"
+    },
+    "box-mode": {
+      "suggested_key": {
+        "default": "Alt+Shift+B",
+        "mac": "Alt+Shift+B"
+      },
+      "description": "Switch to box annotation mode"
+    }
+  }
+}

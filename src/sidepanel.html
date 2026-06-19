@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OMP Annotations</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <h1>Annotate</h1>
+      <span id="status" class="status">Idle</span>
+    </header>
+
+    <section class="page-card">
+      <p id="pageTitle" class="page-title">No active page</p>
+      <p id="pageUrl" class="page-url">Open a website tab, then start annotating.</p>
+    </section>
+
+    <section class="target-card">
+      <label for="targetInput">OMP target</label>
+      <textarea id="targetInput" spellcheck="false" placeholder="Paste workspace_ref=...&#10;surface_ref=..."></textarea>
+      <p id="targetStatus" class="target-status">No OMP target paired. Send uses the active bridge session.</p>
+    </section>
+
+    <section class="controls" aria-label="Annotation controls">
+      <button id="startButton" class="primary" title="Start annotating. Shortcut: Alt+Shift+A">Start</button>
+      <button id="stopButton" class="secondary" title="Stop annotating. Shortcut: Alt+Shift+A">Stop</button>
+      <button id="elementMode" class="mode active" title="Element mode. Shortcut: Alt+Shift+E">Element</button>
+      <button id="boxMode" class="mode" title="Box mode. Shortcut: Alt+Shift+B">Box</button>
+      <button id="sendButton" class="primary" title="Send annotations to active OMP chat">Send</button>
+      <button id="copyButton" title="Copy structured JSON">Copy</button>
+      <button id="downloadButton" title="Download structured JSON">Save</button>
+      <button id="clearButton" class="danger" title="Clear all annotations">Clear</button>
+    </section>
+
+    <section class="shortcuts" aria-label="Keyboard shortcuts">
+      <span><kbd>Alt</kbd><kbd>Shift</kbd><kbd>A</kbd> start or stop</span>
+      <span><kbd>Alt</kbd><kbd>Shift</kbd><kbd>E</kbd> element</span>
+      <span><kbd>Alt</kbd><kbd>Shift</kbd><kbd>B</kbd> box</span>
+      <span><kbd>Alt</kbd><kbd>Shift</kbd><kbd>`</kbd> toggle mode</span>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>Captured</h2>
+        <span id="count">0</span>
+      </div>
+      <div id="list" class="list empty">
+        <p>No annotations yet.</p>
+      </div>
+    </section>
+
+    <footer class="brand-footer">
+      Powered by <a href="https://seotimemachines.com/" target="_blank" rel="noopener noreferrer">SEO Time Machines</a>
+    </footer>
+  </main>
+  <script src="sidepanel.js" type="module"></script>
+</body>
+</html>

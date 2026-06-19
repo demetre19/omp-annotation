@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="560" viewBox="0 0 760 560" role="img" aria-labelledby="title desc">
+  <title id="title">OMP tab context menu Copy IDs item</title>
+  <desc id="desc">Graphic showing the OMP tab context menu with Copy IDs highlighted near the bottom.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#101317"/>
+      <stop offset="1" stop-color="#06080b"/>
+    </linearGradient>
+    <linearGradient id="menu" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#35312f"/>
+      <stop offset="1" stop-color="#242927"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+    <marker id="arrow" markerWidth="13" markerHeight="13" refX="10" refY="6.5" orient="auto">
+      <path d="M0,0 L13,6.5 L0,13 Z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <rect width="760" height="560" fill="url(#bg)"/>
+  <rect x="0" y="0" width="760" height="38" fill="#1d1d1d"/>
+  <text x="18" y="25" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" font-weight="700" fill="#e5e7eb">OMP tab: open context menu</text>
+
+  <rect x="40" y="84" width="390" height="320" rx="10" fill="#0b1017" stroke="#243244"/>
+  <text x="62" y="122" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#22c55e">$ cmux ...</text>
+  <text x="62" y="160" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#e5e7eb">workspace_ref=workspace:10</text>
+  <text x="62" y="190" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#e5e7eb">pane_ref=pane:74</text>
+  <text x="62" y="220" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#e5e7eb">surface_ref=surface:78</text>
+  <text x="62" y="278" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="16" fill="#94a3b8">These IDs are copied from the tab menu.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="300" y="55" width="390" height="455" rx="12" fill="url(#menu)" stroke="#56514f"/>
+    <rect x="316" y="70" width="358" height="44" rx="7" fill="#1f6fd3"/>
+    <text x="336" y="98" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" fill="white">Rename Tab...</text>
+    <text x="642" y="98" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="17" fill="white">⌘ R</text>
+
+    <text x="336" y="142" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" fill="#f4f4f5">Remove Custom Tab Name</text>
+    <line x1="316" y1="166" x2="674" y2="166" stroke="#595452"/>
+    <text x="336" y="202" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" fill="#777">Close Tabs to Left</text>
+    <text x="336" y="236" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" fill="#f4f4f5">Close Tabs to Right</text>
+    <text x="336" y="270" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" fill="#f4f4f5">Close Other Tabs</text>
+    <text x="336" y="304" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" fill="#f4f4f5">Move Tab</text>
+    <text x="650" y="304" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" fill="#f4f4f5">›</text>
+    <line x1="316" y1="326" x2="674" y2="326" stroke="#595452"/>
+    <text x="336" y="362" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" fill="#f4f4f5">Fork Conversation</text>
+    <text x="336" y="396" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" fill="#f4f4f5">New Terminal Tab to Right</text>
+    <text x="626" y="396" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" fill="#9ca3af">⌘ T</text>
+    <line x1="316" y1="420" x2="674" y2="420" stroke="#595452"/>
+    <text x="336" y="456" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" fill="#f4f4f5">Mark Tab as Unread</text>
+    <line x1="316" y1="480" x2="674" y2="480" stroke="#595452"/>
+    <rect x="316" y="488" width="358" height="36" rx="7" fill="#3b342f" stroke="#7a6a3a"/>
+    <text x="336" y="512" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="18" font-weight="700" fill="#ffffff">Copy IDs</text>
+  </g>
+
+  <path d="M165 505 C210 485, 245 482, 314 504" fill="none" stroke="#ef4444" stroke-width="16" stroke-linecap="round" marker-end="url(#arrow)"/>
+  <text x="42" y="508" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="22" font-weight="800" fill="#ef4444">Right-click the OMP tab, then click Copy IDs</text>
+</svg>

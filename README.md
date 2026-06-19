@@ -69,7 +69,8 @@ surface_id=EFBA65E7-E985-40CD-A70C-D6CE29B99F03
 
 Use **Copy IDs** from the tab menu in the OMP/cmux interface.
 
-![OMP tab menu showing Copy IDs](docs/copy-ids-menu.svg)
+<img width="513" height="490" alt="image" src="https://github.com/user-attachments/assets/a483e150-d562-4883-b8a6-7dabe474aee9" /><br><br>
+
 
 Steps:
 

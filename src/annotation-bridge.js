@@ -1,13 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const PORT_START = 47871;
 const PORT_END = 47890;
 const BRIDGE_VERSION = 2;
-const ANNOTATOR_PATH = `${dirname(fileURLToPath(import.meta.url))}/omp-session-annotator.js`;
 const CMUX_BIN = '/Applications/cmux.app/Contents/Resources/bin/cmux';
-const POLL_INTERVAL_MS = 650;
 const CMUX_SEND_CHUNK_SIZE = 8000;
 const SCREENSHOT_DIR = '/tmp/omp-annotation-screenshots';
 const instanceId = crypto.randomUUID();
@@ -17,7 +13,6 @@ let bridgePort = null;
 let bridgeToken = null;
 let activePi = null;
 let activeCtx = null;
-const pollers = new Map();
 export default function annotationBridge(pi) {
   pi.setLabel('Annotation Bridge');
 
@@ -38,18 +33,6 @@ export default function annotationBridge(pi) {
     }
   });
 
-  pi.registerCommand?.('annotate', {
-    description: 'Open a URL in the OMP browser and collect annotations in this session.',
-    handler: async (args, ctx) => {
-      activePi = pi;
-      activeCtx = ctx;
-      const target = String(args || '').trim();
-      if (!target) return 'Usage: /annotate https://example.com';
-      await ensureServer();
-      const started = await startCmuxAnnotationSession(target, ctx);
-      return `Annotation session ready on ${started.surfaceRef} in ${started.elapsedMs}ms.`;
-    }
-  });
 }
 
 
@@ -71,89 +54,6 @@ async function ensureServer() {
   }
 }
 
-async function startCmuxAnnotationSession(target, ctx) {
-  const startedAt = Date.now();
-  const openArgs = ['--json', 'browser', 'open', target, '--focus', 'true'];
-  if (process.env.CMUX_WORKSPACE_ID) openArgs.push('--workspace', process.env.CMUX_WORKSPACE_ID);
-  const open = await runCmux(openArgs);
-  const opened = parseJson(open.stdout, 'cmux browser open');
-  const surfaceRef = opened.surface_ref;
-  if (!surfaceRef) throw new Error(`cmux did not return a browser surface: ${open.stdout}`);
-  await waitForNavigatedSurface(surfaceRef, target);
-  await injectAnnotator(surfaceRef);
-  startSurfacePoller(surfaceRef, ctx);
-  ctx.ui?.notify?.(`Annotation session ready on ${surfaceRef}`, 'info');
-  return { surfaceRef, elapsedMs: Date.now() - startedAt };
-}
-
-async function waitForNavigatedSurface(surfaceRef, target) {
-  const deadline = Date.now() + 5000;
-  let lastUrl = '';
-  while (Date.now() < deadline) {
-    const urlResult = await runCmux(['browser', surfaceRef, 'get', 'url'], { allowFailure: true });
-    lastUrl = urlResult.stdout.trim();
-    if (urlResult.code === 0 && lastUrl && lastUrl !== 'about:blank') {
-      const readyResult = await runCmux(['browser', surfaceRef, 'eval', 'JSON.stringify({ href: location.href, ready: document.readyState })'], { allowFailure: true });
-      if (readyResult.code === 0) {
-        const ready = parseJson(readyResult.stdout, 'cmux ready check');
-        if (ready?.href && ready.href !== 'about:blank' && ready.ready !== 'loading') return;
-      }
-    }
-    await sleep(100);
-  }
-  throw new Error(`Timed out waiting for ${target} to navigate. Last URL: ${lastUrl || 'none'}`);
-}
-
-async function injectAnnotator(surfaceRef) {
-  const annotator = await Bun.file(ANNOTATOR_PATH).text();
-  const script = `${annotator}
-window.__ompSessionAnnotator.clear();
-window.__ompSessionAnnotator.configureBridge({ port: ${bridgePort}, token: ${JSON.stringify(bridgeToken)} });
-JSON.stringify({ ok: true, ready: Boolean(window.__ompSessionAnnotator), export: window.__ompSessionAnnotator.export() });`;
-  const result = await runCmux(['browser', surfaceRef, 'eval', script]);
-  const payload = parseJson(result.stdout, 'cmux browser eval');
-  if (!payload?.ok || !payload?.ready) throw new Error(`annotator injection failed on ${surfaceRef}: ${result.stdout}`);
-}
-
-function startSurfacePoller(surfaceRef, ctx) {
-  const previous = pollers.get(surfaceRef);
-  if (previous) previous.stop();
-
-  const poller = { stopped: false, stop() { this.stopped = true; } };
-  pollers.set(surfaceRef, poller);
-
-  const poll = async () => {
-    if (poller.stopped) return;
-    try {
-      const script = 'JSON.stringify(window.__ompSessionAnnotator?.drainOutbox?.() || { done: false, annotations: [] })';
-      const result = await runCmux(['browser', surfaceRef, 'eval', script], { allowFailure: true });
-      if (result.code === 0 && result.stdout.trim()) {
-        const drained = parseJson(result.stdout, 'cmux poll');
-        if (Array.isArray(drained?.annotations) && drained.annotations.length) {
-          await deliverAnnotations({
-            token: bridgeToken,
-            page: drained.export?.page,
-            annotations: drained.annotations
-          });
-        }
-        if (drained?.done) {
-          poller.stop();
-          pollers.delete(surfaceRef);
-          ctx.ui?.notify?.(`Annotation session finished on ${surfaceRef}`, 'info');
-          return;
-        }
-      }
-    } catch (error) {
-      ctx.ui?.notify?.(`Annotation polling stopped on ${surfaceRef}: ${error.message}`, 'error');
-      poller.stop();
-      pollers.delete(surfaceRef);
-      return;
-    }
-    setTimeout(poll, POLL_INTERVAL_MS);
-  };
-
-  setTimeout(poll, POLL_INTERVAL_MS);
-}
 
 async function runCmux(args, options = {}) {
   const proc = Bun.spawn([CMUX_BIN, ...args], {
@@ -172,18 +72,6 @@ async function runCmux(args, options = {}) {
   return { stdout, stderr, code };
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function parseJson(text, label) {
-  const trimmed = String(text || '').trim();
-  try {
-    return JSON.parse(trimmed);
-  } catch (error) {
-    throw new Error(`${label} returned non-JSON output: ${trimmed || error.message}`);
-  }
-}
 
 async function handleRequest(request) {
   const url = new URL(request.url);

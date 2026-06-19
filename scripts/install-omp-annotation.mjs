@@ -5,38 +5,31 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const home = process.env.HOME || '/Users/apple';
 const bridgeSource = `${root}/src/annotation-bridge.js`;
-const annotatorSource = `${root}/src/omp-session-annotator.js`;
 const agentDir = `${home}/.omp/agent`;
 const extensionDir = `${agentDir}/extensions`;
-const commandDir = `${agentDir}/commands`;
 const bridgeTarget = `${extensionDir}/annotation-bridge.js`;
-const annotatorTarget = `${extensionDir}/omp-session-annotator.js`;
-const commandTarget = `${commandDir}/annotate.md`;
 const configTarget = `${agentDir}/config.yml`;
 const binTarget = `${home}/.local/bin/omp-annotation-install`;
 const staleLaunchAgentTarget = `${home}/Library/LaunchAgents/com.apple.omp-annotation-bridge.plist`;
+const staleAnnotatorTarget = `${extensionDir}/omp-session-annotator.js`;
+const staleCommandTarget = `${agentDir}/commands/annotate.md`;
 
 await mkdir(extensionDir, { recursive: true });
-await mkdir(commandDir, { recursive: true });
 await mkdir(dirname(binTarget), { recursive: true });
 
 await copyFileIfChanged(bridgeSource, bridgeTarget);
-await copyFileIfChanged(annotatorSource, annotatorTarget);
-await writeFileIfChanged(commandTarget, commandText(), 'utf8');
 await ensureConfig(configTarget, bridgeTarget);
 await writeFileIfChanged(binTarget, wrapperText(), 'utf8');
 await chmod(binTarget, 0o755);
 await rm(staleLaunchAgentTarget, { force: true });
+await rm(staleAnnotatorTarget, { force: true });
+await rm(staleCommandTarget, { force: true });
 
 await assertReadable(bridgeTarget);
-await assertReadable(commandTarget);
-await assertReadable(annotatorTarget);
 
 console.log(`Installed OMP annotation bridge at ${bridgeTarget}`);
-console.log(`Installed OMP session annotator at ${annotatorTarget}`);
-console.log(`Installed /annotate fallback command at ${commandTarget}`);
 console.log(`Installed repair command at ${binTarget}`);
-console.log('No macOS Login Item is installed. Run this installer manually after OMP updates if needed.');
+console.log('Run this installer manually after OMP updates if needed.');
 
 async function copyFileIfChanged(source, target) {
   const next = await readFile(source);
@@ -94,26 +87,4 @@ function wrapperText() {
   return `#!/bin/zsh\nexec /opt/homebrew/bin/node ${JSON.stringify(`${root}/scripts/install-omp-annotation.mjs`)}\n`;
 }
 
-function commandText() {
-  return `---
-description: Open a URL in the OMP browser and collect Codex-style annotations in this chat.
----
-Start an OMP-browser annotation session for this chat.
-
-URL: $ARGUMENTS
-
-Requirements:
-- Use the OMP browser tool, not the external Chrome extension.
-- Open the URL above in a cmux/default browser tab named \`annotate-session\`.
-- Inject \`${annotatorTarget}\` into that tab.
-- If \`window.__ompSessionAnnotator\` already exists, call \`window.__ompSessionAnnotator.start()\`.
-- Poll \`window.__ompSessionAnnotator.drainOutbox()\` on the same browser tab about once per second.
-- When \`drainOutbox()\` returns annotations, post them in this chat immediately and keep polling.
-- Enter inside an inline note sends that annotation. Press Enter twice to send every saved or queued annotation.
-- Cmd+Enter or Ctrl+Enter saves the note without sending. Shift+Enter inserts a newline. Done sends all and finishes.
-- When \`drainOutbox().done\` is true, read \`window.__ompSessionAnnotator.export()\` once, post any remaining annotations, and stop polling.
-
-If no URL was supplied, ask me for the URL before opening the browser.
-`;
-}
 

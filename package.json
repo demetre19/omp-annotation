@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "install:omp": "node scripts/install-omp-annotation.mjs",
-    "test": "node tests/extension-smoke.test.mjs && node tests/omp-session-annotator.test.mjs && node tests/compact-bridge.test.mjs",
+    "test": "node tests/extension-smoke.test.mjs && node tests/compact-bridge.test.mjs",
     "test:foreground": "FOREGROUND=true node tests/extension-smoke.test.mjs",
     "test:headless": "HEADLESS=true node tests/extension-smoke.test.mjs"
   },

@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import bridge, { chunkTextForCmuxSend, formatAnnotationsForTargetedChat, materializeAnnotationScreenshots } from '../src/annotation-bridge.js';
 
-let command;
+const commands = new Map();
 const sent = [];
 const pi = {
   setLabel() {},
   on() {},
   registerCommand(name, spec) {
-    if (name === 'annotate') command = spec;
+    commands.set(name, spec);
   },
   async sendUserMessage(message) {
     sent.push(message);
@@ -16,7 +16,8 @@ const pi = {
 };
 
 bridge(pi);
-assert(command, 'bridge should register annotate command');
+assert(commands.has('annotation-bridge'), 'bridge should register the status command');
+assert(!commands.has('annotate'), 'bridge should not register the removed /annotate command');
 
 const statusResponse = await fetch('http://127.0.0.1:47890/v1/status').catch(() => null);
 assert.equal(statusResponse, null, 'test should not depend on a fixed live port');

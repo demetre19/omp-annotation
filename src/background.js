@@ -190,6 +190,16 @@ async function handleMessage(message, sender) {
     broadcast({ type: 'OMP_ANNOTATION_STATE_CHANGED', tabId, state: next });
     return { ok: true, state: next, target };
   }
+
+  if (type === 'OMP_ANNOTATION_CLOSE_SESSION') {
+    const tabId = message.tabId ?? sender.tab?.id ?? lastAnnotatableTabId;
+    if (!tabId) return { ok: true };
+    await chrome.storage.session.remove(tabKey(tabId));
+    await sendToTab(tabId, { type: 'OMP_ANNOTATION_DISPOSE' }).catch(() => {});
+    const state = { ...DEFAULT_STATE };
+    broadcast({ type: 'OMP_ANNOTATION_STATE_CHANGED', tabId, state });
+    return { ok: true, state };
+  }
   if (type === 'OMP_ANNOTATION_SEND_ONE_TO_OMP') {
     const tabId = message.tabId ?? sender.tab?.id ?? (await getActiveTab())?.id;
     if (!tabId) return { ok: false, error: 'No active tab.' };

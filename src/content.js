@@ -44,6 +44,11 @@
       sendResponse({ ok: true });
       return false;
     }
+    if (message?.type === 'OMP_ANNOTATION_DISPOSE') {
+      disposeOverlay();
+      sendResponse({ ok: true });
+      return false;
+    }
     return false;
   });
 
@@ -157,6 +162,17 @@
     ui.layer.textContent = '';
     ui.outline.classList.remove('visible');
     ui.drag.classList.remove('visible');
+  }
+
+  function disposeOverlay() {
+    state.enabled = false;
+    state.annotations = [];
+    clearOverlay();
+    for (const timer of state.noteTimers.values()) clearTimeout(timer);
+    state.noteTimers.clear();
+    document.documentElement.style.cursor = '';
+    ui.root.remove();
+    window.__ompAnnotationContentLoaded = false;
   }
 
   function setMode(mode) {

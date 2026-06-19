@@ -65,6 +65,8 @@ async function init() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') refreshAndBootstrap();
   });
+  window.addEventListener('pagehide', closeAnnotationSession);
+  window.addEventListener('beforeunload', closeAnnotationSession);
   await bootstrapFromClipboard();
 }
 
@@ -83,6 +85,11 @@ async function refresh() {
 async function refreshAndBootstrap() {
   await refresh();
   await bootstrapFromClipboard();
+}
+
+function closeAnnotationSession() {
+  if (!activeTab?.id) return;
+  send({ type: 'OMP_ANNOTATION_CLOSE_SESSION', tabId: activeTab.id }).catch(() => {});
 }
 
 async function setEnabled(enabled) {

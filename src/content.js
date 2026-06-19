@@ -13,17 +13,22 @@
     editingNoteId: null,
     noteTimers: new Map()
   };
+  const lifecycle = new AbortController();
+  let disposed = false;
 
   const ui = createOverlay();
   wireToolbar();
   wirePageEvents();
   chrome.runtime.sendMessage({ type: 'OMP_ANNOTATION_CONTENT_READY' }).catch(() => {});
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+
+  function handleRuntimeMessage(message, _sender, sendResponse) {
     if (message?.type === 'OMP_ANNOTATION_PING') {
       sendResponse({ ok: true });
       return false;
     }
+    if (disposed) return false;
     if (message?.type === 'OMP_ANNOTATION_SYNC') {
       syncState(message.state || {});
       sendResponse({ ok: true });
@@ -50,7 +55,7 @@
       return false;
     }
     return false;
-  });
+  }
 
   function createOverlay() {
     const root = document.createElement('div');
@@ -133,9 +138,9 @@
       if (action === 'copy') copyAnnotations();
       if (action === 'clear') clearAnnotations();
       if (action === 'close') stopAnnotating();
-    });
-    ui.bar.addEventListener('mousedown', stopEvent, true);
-    ui.bar.addEventListener('mouseup', stopEvent, true);
+    }, { signal: lifecycle.signal });
+    ui.bar.addEventListener('mousedown', stopEvent, { capture: true, signal: lifecycle.signal });
+    ui.bar.addEventListener('mouseup', stopEvent, { capture: true, signal: lifecycle.signal });
   }
 
   function syncState(next) {
@@ -165,6 +170,10 @@
   }
 
   function disposeOverlay() {
+    if (disposed) return;
+    disposed = true;
+    lifecycle.abort();
+    chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
     state.enabled = false;
     state.annotations = [];
     clearOverlay();
@@ -212,10 +221,11 @@
         stopEvent(event);
       }
     };
-    window.addEventListener('keydown', handleShortcut, true);
-    window.addEventListener('keyup', handleShortcut, true);
-    document.addEventListener('keydown', handleShortcut, true);
-    document.addEventListener('keyup', handleShortcut, true);
+    const captureOptions = { capture: true, signal: lifecycle.signal };
+    window.addEventListener('keydown', handleShortcut, captureOptions);
+    window.addEventListener('keyup', handleShortcut, captureOptions);
+    document.addEventListener('keydown', handleShortcut, captureOptions);
+    document.addEventListener('keyup', handleShortcut, captureOptions);
 
     document.addEventListener('mousemove', (event) => {
       if (!state.enabled || isOverlayEvent(event)) return;
@@ -225,7 +235,7 @@
         return;
       }
       if (state.mode === 'element') drawHover(inspectElementAt(event.clientX, event.clientY));
-    }, true);
+    }, captureOptions);
 
     document.addEventListener('mousedown', (event) => {
       if (!state.enabled || event.button !== 0 || isOverlayEvent(event)) return;
@@ -235,7 +245,7 @@
         updateDrag(event.clientX, event.clientY);
         stopEvent(event);
       }
-    }, true);
+    }, captureOptions);
 
     document.addEventListener('mouseup', (event) => {
       if (!state.enabled || event.button !== 0 || isOverlayEvent(event)) return;
@@ -247,7 +257,7 @@
         if (box.width > 8 && box.height > 8) captureBox(box);
         stopEvent(event);
       }
-    }, true);
+    }, captureOptions);
 
     document.addEventListener('click', (event) => {
       if (!state.enabled || state.mode !== 'element' || event.shiftKey || isOverlayEvent(event)) return;
@@ -255,10 +265,10 @@
       if (!element) return;
       captureElement(element);
       stopEvent(event);
-    }, true);
+    }, captureOptions);
 
-    window.addEventListener('scroll', drawAnnotations, { passive: true });
-    window.addEventListener('resize', drawAnnotations, { passive: true });
+    window.addEventListener('scroll', drawAnnotations, { passive: true, signal: lifecycle.signal });
+    window.addEventListener('resize', drawAnnotations, { passive: true, signal: lifecycle.signal });
   }
 
   function isOverlayEvent(event) {

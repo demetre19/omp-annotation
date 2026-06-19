@@ -3,6 +3,7 @@ let state = { enabled: false, mode: 'element', targetText: '', target: null, ann
 const noteTimers = new Map();
 let targetTimer = 0;
 let lastBootstrappedTargetText = '';
+let panelPort = null;
 
 const els = {
   status: document.getElementById('status'),
@@ -26,10 +27,12 @@ init();
 
 async function init() {
   await refresh();
+  connectPanelPort();
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type !== 'OMP_ANNOTATION_STATE_CHANGED') return;
     if (!activeTab?.id || message.tabId === activeTab.id) {
       activeTab = activeTab?.id ? activeTab : { id: message.tabId, title: 'Annotated page', url: '' };
+      notifyPanelActive();
       state = message.state;
       render();
       bootstrapFromClipboard();
@@ -73,6 +76,7 @@ async function init() {
 async function refresh() {
   const tabResponse = await send({ type: 'OMP_ANNOTATION_GET_ACTIVE_TAB' });
   activeTab = tabResponse?.tab || null;
+  notifyPanelActive();
   if (!activeTab?.id) {
     render();
     return;
@@ -85,6 +89,20 @@ async function refresh() {
 async function refreshAndBootstrap() {
   await refresh();
   await bootstrapFromClipboard();
+}
+
+function connectPanelPort() {
+  try {
+    panelPort = chrome.runtime.connect({ name: 'omp-annotation-sidepanel' });
+    panelPort.onDisconnect.addListener(() => { panelPort = null; });
+    notifyPanelActive();
+  } catch (_) {}
+}
+
+function notifyPanelActive() {
+  if (activeTab?.id && panelPort) {
+    panelPort.postMessage({ type: 'OMP_ANNOTATION_SIDE_PANEL_ACTIVE', tabId: activeTab.id });
+  }
 }
 
 function closeAnnotationSession() {

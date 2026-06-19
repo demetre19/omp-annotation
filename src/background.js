@@ -16,6 +16,7 @@ const BOX_SCREENSHOT_QUALITY = 0.85;
 
 
 let lastAnnotatableTabId = null;
+const sidePanelPorts = new Map();
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
@@ -62,6 +63,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: false, error: String(error?.message || error) });
   });
   return true;
+});
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'omp-annotation-sidepanel') return;
+  sidePanelPorts.set(port, null);
+  port.onMessage.addListener((message) => {
+    if (message?.type === 'OMP_ANNOTATION_SIDE_PANEL_ACTIVE' && Number.isInteger(message.tabId)) {
+      sidePanelPorts.set(port, message.tabId);
+    }
+  });
+  port.onDisconnect.addListener(() => {
+    const tabId = sidePanelPorts.get(port);
+    sidePanelPorts.delete(port);
+    if (tabId) closeAnnotationSession(tabId);
+  });
 });
 
 async function openPanelAndStart(tabId) {
@@ -194,12 +210,10 @@ async function handleMessage(message, sender) {
   if (type === 'OMP_ANNOTATION_CLOSE_SESSION') {
     const tabId = message.tabId ?? sender.tab?.id ?? lastAnnotatableTabId;
     if (!tabId) return { ok: true };
-    await chrome.storage.session.remove(tabKey(tabId));
-    await sendToTab(tabId, { type: 'OMP_ANNOTATION_DISPOSE' }).catch(() => {});
-    const state = { ...DEFAULT_STATE };
-    broadcast({ type: 'OMP_ANNOTATION_STATE_CHANGED', tabId, state });
+    const state = await closeAnnotationSession(tabId);
     return { ok: true, state };
   }
+
   if (type === 'OMP_ANNOTATION_SEND_ONE_TO_OMP') {
     const tabId = message.tabId ?? sender.tab?.id ?? (await getActiveTab())?.id;
     if (!tabId) return { ok: false, error: 'No active tab.' };
@@ -222,7 +236,6 @@ async function handleMessage(message, sender) {
     return { ok: true, state: next, delivered: result.delivered };
   }
 
-
   if (type === 'OMP_ANNOTATION_SEND_TO_OMP') {
     const tabId = message.tabId ?? sender.tab?.id ?? (await getActiveTab())?.id;
     if (!tabId) return { ok: false, error: 'No active tab.' };
@@ -235,8 +248,10 @@ async function handleMessage(message, sender) {
     const tabId = sender.tab?.id;
     if (!tabId) return { ok: true };
     rememberTab(sender.tab);
-    const state = await getState(tabId);
+    const current = await getState(tabId);
+    const state = current.annotations.length ? await patchState(tabId, { annotations: [] }) : current;
     await sendToTab(tabId, { type: 'OMP_ANNOTATION_SYNC', state }).catch(() => {});
+    if (current.annotations.length) broadcast({ type: 'OMP_ANNOTATION_STATE_CHANGED', tabId, state });
     return { ok: true, state };
   }
 
@@ -273,6 +288,14 @@ async function ensureContentScript(tabId) {
   } catch (_) {
     await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['src/content.js'] });
   }
+}
+
+async function closeAnnotationSession(tabId) {
+  await chrome.storage.session.remove(tabKey(tabId));
+  await sendToTab(tabId, { type: 'OMP_ANNOTATION_DISPOSE' }).catch(() => {});
+  const state = { ...DEFAULT_STATE };
+  broadcast({ type: 'OMP_ANNOTATION_STATE_CHANGED', tabId, state });
+  return state;
 }
 
 async function sendToTab(tabId, message) {

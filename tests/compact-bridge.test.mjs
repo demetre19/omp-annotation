@@ -34,6 +34,7 @@ const targeted = formatAnnotationsForTargetedChat({
   selector: 'div.stm-pv-hero:nth-of-type(1) > div:nth-of-type(1) > h1',
   xpath: '/html/body/main/section[1]/div/h1',
   bbox: { pageX: 48, pageY: 120, width: 420, height: 54 },
+  viewport: { width: 1440, height: 900, devicePixelRatio: 2 },
   html: '<h1>STM Protected Video</h1>',
   screenshot: {
     mimeType: 'image/webp',
@@ -59,6 +60,7 @@ assert(targeted.includes('Selector: div.stm-pv-hero:nth-of-type(1) > div:nth-of-
 assert(targeted.includes('<p class="stm-pv-kicker">Protected video hosting</p>'), 'targeted formatter should include nearby sibling HTML');
 assert(!targeted.includes('Raw JSON'), 'targeted formatter should not send raw JSON');
 assert(targeted.includes('Screenshot: included image/webp 210x27 from 420x54 scale=0.50'), 'targeted formatter should include screenshot metadata');
+assert(targeted.includes('Viewport: 1440x900 @2x'), 'targeted formatter should include viewport dimensions');
 assert(targeted.includes('Screenshot file: /tmp/omp-annotation-screenshots/annotation-test.webp'), 'targeted formatter should include screenshot file path');
 assert(targeted.includes('![Annotation 1 screenshot](file:///tmp/omp-annotation-screenshots/annotation-test.webp)'), 'targeted formatter should include file markdown image');
 assert(!targeted.includes('TEST_IMAGE_BYTES'), 'targeted formatter should not include raw screenshot data');

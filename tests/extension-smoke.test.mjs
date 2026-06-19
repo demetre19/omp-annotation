@@ -87,11 +87,13 @@ try {
   const state = await send({ type: 'OMP_ANNOTATION_GET_STATE', tabId: tab.id }).then((response) => response.state);
   assert(state.enabled === true, 'annotation mode should be enabled');
   assert(state.annotations.length === 1, 'one annotation should be captured');
+  const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight, devicePixelRatio: window.devicePixelRatio || 1 }));
   const annotation = state.annotations[0];
   assert(annotation.selector === '#cta', `expected stable id selector, got ${annotation.selector}`);
   assert(annotation.role === 'button', `expected button role, got ${annotation.role}`);
   assert(annotation.label === 'Play Week 1 video', `expected aria label, got ${annotation.label}`);
   assert(annotation.bbox.width > 20, 'expected non-empty bounding box');
+  assert(annotation.viewport?.width === viewport.width && annotation.viewport?.height === viewport.height && annotation.viewport?.devicePixelRatio === viewport.devicePixelRatio, `element annotation should include current viewport dimensions, got ${JSON.stringify(annotation.viewport)} expected ${JSON.stringify(viewport)}`);
   assert(annotation.html.includes('<button id="cta"'), 'annotation should include target outer HTML');
   assert(annotation.context?.parent?.selector === 'section[data-testid="hero-card"]', `expected parent context selector, got ${annotation.context?.parent?.selector}`);
   assert(annotation.context?.previous?.html?.includes('<p>Start here'), 'annotation should include previous sibling HTML context');
@@ -125,6 +127,7 @@ try {
   const withBox = await send({ type: 'OMP_ANNOTATION_GET_STATE', tabId: tab.id }).then((response) => response.state);
   assert(withBox.annotations[2].kind === 'box', 'box annotation should be captured');
   assert(withBox.annotations[2].bbox.width === 200, `expected 200px wide box, got ${withBox.annotations[2].bbox.width}`);
+  assert(withBox.annotations[2].viewport?.width === viewport.width && withBox.annotations[2].viewport?.height === viewport.height && withBox.annotations[2].viewport?.devicePixelRatio === viewport.devicePixelRatio, `box annotation should include current viewport dimensions, got ${JSON.stringify(withBox.annotations[2].viewport)} expected ${JSON.stringify(viewport)}`);
   const boxScreenshot = withBox.annotations[2].screenshot;
   assert(boxScreenshot?.dataUrl?.startsWith('data:image/webp;base64,'), 'box annotation should include a compact WebP screenshot');
   assert(boxScreenshot.width <= 1920, `box screenshot width should be capped at 1920, got ${boxScreenshot.width}`);
@@ -135,6 +138,7 @@ try {
 
   const renderedCount = await panel.locator('#count').textContent();
   assert(renderedCount === '3', `side panel should render three annotations, got ${renderedCount}`);
+  assert(await panel.locator('.details').first().textContent().then((text) => text.includes(`Viewport: ${viewport.width} x ${viewport.height}`)), 'side panel should render viewport dimensions');
 
   await send({ type: 'OMP_ANNOTATION_CLEAR', tabId: tab.id });
   const cleared = await send({ type: 'OMP_ANNOTATION_GET_STATE', tabId: tab.id }).then((response) => response.state);

@@ -280,6 +280,7 @@ function formatCompactAnnotation(annotation, fallbackNumber) {
   const selector = compactSelector(annotation.selector || '');
   const xpath = compactText(annotation.xpath || '', 220);
   const box = annotation.bbox ? `${Math.round(annotation.bbox.pageX ?? annotation.bbox.x ?? 0)},${Math.round(annotation.bbox.pageY ?? annotation.bbox.y ?? 0)} ${Math.round(annotation.bbox.width ?? 0)}x${Math.round(annotation.bbox.height ?? 0)}` : '';
+  const viewport = formatViewport(annotation.viewport);
   const screenshotLines = formatScreenshotLines(annotation.screenshot, number, annotation.screenshotError);
   const target = [
     annotation.tagName ? `<${annotation.tagName}>` : null,
@@ -295,6 +296,7 @@ function formatCompactAnnotation(annotation, fallbackNumber) {
     selector ? `Selector: ${selector}` : null,
     xpath ? `XPath: ${xpath}` : null,
     box ? `Box: ${box}` : null,
+    viewport ? `Viewport: ${viewport}` : null,
     ...screenshotLines,
     formatContextLine('Parent', annotation.context?.parent),
     formatContextLine('Container', annotation.context?.container),
@@ -302,6 +304,19 @@ function formatCompactAnnotation(annotation, fallbackNumber) {
     formatSiblingLine('Next', annotation.context?.next),
     annotation.html ? `HTML: ${compactText(annotation.html, 420)}` : null
   ].filter(Boolean);
+}
+
+function formatViewport(viewport) {
+  if (!viewport) return '';
+  const width = Math.round(Number(viewport.width || 0));
+  const height = Math.round(Number(viewport.height || 0));
+  if (!width || !height) return '';
+  const dpr = Number(viewport.devicePixelRatio || 0);
+  return dpr > 0 ? `${width}x${height} @${formatNumber(dpr)}x` : `${width}x${height}`;
+}
+
+function formatNumber(value) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 function formatContextLine(label, context) {
@@ -459,6 +474,7 @@ function formatAnnotation(annotation, fallbackNumber) {
     annotation.selector ? `   Selector: ${annotation.selector}` : null,
     annotation.xpath ? `   XPath: ${annotation.xpath}` : null,
     annotation.bbox ? `   Box: ${Math.round(annotation.bbox.pageX ?? annotation.bbox.x ?? 0)}, ${Math.round(annotation.bbox.pageY ?? annotation.bbox.y ?? 0)}, ${Math.round(annotation.bbox.width ?? 0)} x ${Math.round(annotation.bbox.height ?? 0)}` : null,
+    annotation.viewport ? `   Viewport: ${formatViewport(annotation.viewport)}` : null,
     ''
   ].filter((line) => line !== null);
 }

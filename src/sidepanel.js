@@ -262,11 +262,24 @@ function renderAnnotation(annotation) {
   details.append(
     detailLine(`Type: ${annotation.kind}`),
     detailLine(`Box: ${Math.round(annotation.bbox?.width || 0)} x ${Math.round(annotation.bbox?.height || 0)} at ${Math.round(annotation.bbox?.pageX || 0)}, ${Math.round(annotation.bbox?.pageY || 0)}`),
+    detailLine(`Viewport: ${formatViewport(annotation.viewport)}`),
     detailLine(`Role: ${annotation.role || 'none'}`)
   );
 
   card.append(head, note, details);
   return card;
+}
+
+function formatViewport(viewport) {
+  const width = Math.round(Number(viewport?.width || 0));
+  const height = Math.round(Number(viewport?.height || 0));
+  if (!width || !height) return 'unknown';
+  const dpr = Number(viewport?.devicePixelRatio || 0);
+  return dpr > 0 ? `${width} x ${height} @ ${formatNumber(dpr)}x` : `${width} x ${height}`;
+}
+
+function formatNumber(value) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 function annotationTitle(annotation) {

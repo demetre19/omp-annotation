@@ -319,7 +319,8 @@ function compactAnnotations(annotations) {
     } : null,
     viewport: annotation.viewport ? {
       width: annotation.viewport.width,
-      height: annotation.viewport.height
+      height: annotation.viewport.height,
+      devicePixelRatio: annotation.viewport.devicePixelRatio
     } : null,
     scroll: annotation.scroll ? {
       x: annotation.scroll.x,

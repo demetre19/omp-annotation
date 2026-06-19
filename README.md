@@ -5,8 +5,8 @@ Chrome/Brave MV3 extension for sending visual annotations from a browser page in
 It provides:
 
 - A browser side panel with an **OMP target** field.
-- Element annotations: click a page element, add a note, send it.
-- Box annotations: draw a rectangle, add a note, send it with a compressed screenshot.
+- Element annotations: click a page element, add a note, send it with viewport dimensions.
+- Box annotations: draw a rectangle, add a note, send it with viewport dimensions and a compressed screenshot.
 - Fast startup from a copied OMP target block.
 - An OMP bridge extension that receives annotations and forwards them to the active chat through `cmux`.
 - A browser-injected fallback annotator for `/annotate <url>` sessions inside OMP.
@@ -111,6 +111,8 @@ Useful shortcuts:
 - `Enter`: send the current note.
 - `Cmd+Enter` / `Ctrl+Enter`: save note without sending.
 - `Shift+Enter`: insert a newline.
+
+Every sent annotation includes the current viewport width, viewport height, and device pixel ratio. This helps the receiver distinguish desktop-visible UI from mobile-hidden UI.
 
 ## Screenshot behavior
 

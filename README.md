@@ -2,6 +2,9 @@
 
 Chrome/Brave MV3 extension for sending visual annotations from a browser page into an OMP/Codex chat.
 
+<img width="2258" height="1122" alt="image" src="https://github.com/user-attachments/assets/9b3e32fd-b161-4f3e-85c2-6bc283f48d12" />
+
+
 It provides:
 
 - A browser side panel with an **OMP target** field.

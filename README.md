@@ -149,39 +149,17 @@ The bridge is a local OMP agent extension. It starts an HTTP server on `127.0.0.
 
 The browser extension discovers the bridge, sends annotation payloads to it, and includes the copied OMP target IDs. The bridge validates its session token, materializes screenshot files when present, formats a compact message, and sends that message to the target `cmux` surface.
 
-## Development
+## Updating
 
-Install development dependencies from the lockfile:
+After changing or pulling browser extension files, reload the unpacked extension in Chrome/Brave.
 
-```sh
-npm ci
-```
-
-Run tests:
-
-```sh
-npm test
-```
-
-Run the browser smoke test visibly:
-
-```sh
-npm run test:foreground
-```
-
-Run the headless browser smoke test:
-
-```sh
-npm run test:headless
-```
-
-After changing `src/annotation-bridge.js`, reinstall and restart OMP:
+After changing the OMP bridge, run:
 
 ```sh
 npm run install:omp
 ```
 
-After changing browser extension files, reload the unpacked extension in Chrome/Brave.
+Then restart the current OMP session.
 
 ## Troubleshooting
 

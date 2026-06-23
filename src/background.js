@@ -164,6 +164,20 @@ async function handleMessage(message, sender) {
     return { ok: true, state: next };
   }
 
+  if (type === 'OMP_ANNOTATION_UPDATE_ELEMENT') {
+    const tabId = message.tabId ?? sender.tab?.id ?? (await getActiveTab())?.id;
+    if (!tabId) return { ok: false, error: 'No active tab.' };
+    const state = await getState(tabId);
+    const current = state.annotations.find((annotation) => annotation.id === message.id);
+    if (!current) return { ok: false, error: 'Annotation not found.' };
+    const updated = normalizeAnnotation({ ...current, ...message.annotation, id: current.id, number: current.number }, current.number, tabId);
+    const annotations = state.annotations.map((annotation) => annotation.id === current.id ? updated : annotation);
+    const next = await patchState(tabId, { annotations });
+    await sendToTab(tabId, { type: 'OMP_ANNOTATION_SYNC', state: next });
+    broadcast({ type: 'OMP_ANNOTATION_STATE_CHANGED', tabId, state: next });
+    return { ok: true, state: next, annotation: updated };
+  }
+
   if (type === 'OMP_ANNOTATION_DELETE') {
     const tabId = message.tabId ?? sender.tab?.id ?? (await getActiveTab())?.id;
     if (!tabId) return { ok: false, error: 'No active tab.' };
@@ -228,12 +242,13 @@ async function handleMessage(message, sender) {
     const result = await sendAnnotationsToOmp({
       tab: tab ? serializeTab(tab) : null,
       state: { ...next, annotations: [{ ...annotation, note, sentAt }] },
-      target: next.target
+      target: next.target,
+      deliveryMode: message.deliveryMode === 'queue' ? 'queue' : 'send'
     });
     if (!result.ok) return result;
     await sendToTab(tabId, { type: 'OMP_ANNOTATION_SYNC', state: next });
     broadcast({ type: 'OMP_ANNOTATION_STATE_CHANGED', tabId, state: next });
-    return { ok: true, state: next, delivered: result.delivered };
+    return { ok: true, state: next, delivered: result.delivered, queued: Boolean(result.queued) };
   }
 
   if (type === 'OMP_ANNOTATION_SEND_TO_OMP') {
@@ -241,7 +256,8 @@ async function handleMessage(message, sender) {
     if (!tabId) return { ok: false, error: 'No active tab.' };
     const state = await getState(tabId);
     const tab = await chrome.tabs.get(tabId).catch(() => null);
-    return sendAnnotationsToOmp({ tab: tab ? serializeTab(tab) : null, state, target: state.target });
+    const deliveryMode = message.deliveryMode === 'queue' ? 'queue' : 'send';
+    return sendAnnotationsToOmp({ tab: tab ? serializeTab(tab) : null, state, target: state.target, deliveryMode });
   }
 
   if (type === 'OMP_ANNOTATION_CONTENT_READY') {
@@ -313,11 +329,13 @@ async function getState(tabId) {
 async function sendAnnotationsToOmp(payload) {
   const bridge = await discoverBridge();
   if (!bridge?.ok) return bridge;
+  const deliveryMode = payload.deliveryMode === 'queue' ? 'queue' : 'send';
   const response = await fetch(`http://127.0.0.1:${bridge.port}/v1/annotations`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       token: bridge.token,
+      deliveryMode,
       target: payload.target || payload.state?.target || null,
       tab: payload.tab ? { title: payload.tab.title, url: payload.tab.url } : null,
       annotations: compactAnnotations(payload.state?.annotations || [])
@@ -325,7 +343,7 @@ async function sendAnnotationsToOmp(payload) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.ok) return { ok: false, error: data.error || `Bridge HTTP ${response.status}` };
-  return { ok: true, delivered: data.delivered || 0, port: bridge.port };
+  return { ok: true, delivered: data.delivered || 0, queued: Boolean(data.queued || deliveryMode === 'queue'), port: bridge.port };
 }
 
 function compactAnnotations(annotations) {

@@ -315,9 +315,29 @@ textarea {
   outline: none;
 }
 
+.annotation-note {
+  min-height: 34px;
+  height: 34px;
+  resize: none;
+  border-radius: 8px;
+  border-color: rgba(107, 114, 128, .55);
+  background: #111827;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.annotation-note:focus {
+  border-color: rgba(107, 114, 128, .85);
+  box-shadow: 0 0 0 2px rgba(107, 114, 128, .18);
+}
+
+.annotation-note.expanded {
+  white-space: pre-wrap;
+}
+
 textarea:focus {
-  border-color: rgba(245, 158, 11, .7);
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, .13);
+  border-color: rgba(107, 114, 128, .85);
+  box-shadow: 0 0 0 2px rgba(107, 114, 128, .18);
 }
 
 .details {

@@ -110,8 +110,10 @@ Useful shortcuts:
 - `Alt+Shift+B`: Box mode.
 - `Alt+Shift+``: toggle between Element and Box mode while annotation is active.
 - `Esc`: stop annotation and remove the overlay.
-- `Enter`: send the current note.
-- `Cmd+Enter` / `Ctrl+Enter`: save note without sending.
+- Element mode before capture: click a target, then use `↑` parent, `↓` child, `←` previous sibling, `→` next sibling, and `Enter` to capture the highlighted element.
+- Element notes after capture: use `Cmd`/`Ctrl` + `↑`/`↓`/`←`/`→` to retarget the saved annotation while the note field is open.
+- `Cmd+Enter` / `Ctrl+Enter` / `Option+Enter`: queue the current note as a follow-up.
+- `Enter`: save note without sending.
 - `Shift+Enter`: insert a newline.
 
 Every sent annotation includes the current viewport width, viewport height, and device pixel ratio. This helps the receiver distinguish desktop-visible UI from mobile-hidden UI.
@@ -147,7 +149,7 @@ That path lets an agent read the image directly. The bridge does not paste raw b
 
 The bridge is a local OMP agent extension. It starts an HTTP server on `127.0.0.1`, using the first available port in `47871` through `47890`.
 
-The browser extension discovers the bridge, sends annotation payloads to it, and includes the copied OMP target IDs. The bridge validates its session token, materializes screenshot files when present, formats a compact message, and sends that message to the target `cmux` surface.
+The browser extension discovers the bridge, sends annotation payloads to it, and includes the copied OMP target IDs. The bridge validates its session token, materializes screenshot files when present, formats a compact message, and submits it to the target `cmux` surface with either plain Enter or the OMP follow-up queue chord.
 
 ## Updating
 

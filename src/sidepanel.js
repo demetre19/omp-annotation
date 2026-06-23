@@ -14,6 +14,7 @@ const els = {
   elementMode: document.getElementById('elementMode'),
   boxMode: document.getElementById('boxMode'),
   sendButton: document.getElementById('sendButton'),
+  queueButton: document.getElementById('queueButton'),
   copyButton: document.getElementById('copyButton'),
   downloadButton: document.getElementById('downloadButton'),
   clearButton: document.getElementById('clearButton'),
@@ -43,6 +44,7 @@ async function init() {
   els.elementMode.addEventListener('click', () => setMode('element'));
   els.boxMode.addEventListener('click', () => setMode('box'));
   els.sendButton.addEventListener('click', sendToOmp);
+  els.queueButton.addEventListener('click', queueToOmp);
   els.copyButton.addEventListener('click', copyJson);
   els.downloadButton.addEventListener('click', downloadJson);
   els.clearButton.addEventListener('click', clearAnnotations);
@@ -202,14 +204,23 @@ function looksLikeTargetBlock(text) {
 
 
 async function sendToOmp() {
+  await submitToOmp('send');
+}
+
+async function queueToOmp() {
+  await submitToOmp('queue');
+}
+
+async function submitToOmp(deliveryMode) {
   if (!activeTab?.id || !state.annotations.length) return;
-  const response = await send({ type: 'OMP_ANNOTATION_SEND_TO_OMP', tabId: activeTab.id });
+  const button = deliveryMode === 'queue' ? els.queueButton : els.sendButton;
+  const response = await send({ type: 'OMP_ANNOTATION_SEND_TO_OMP', tabId: activeTab.id, deliveryMode });
   if (response?.ok) {
     chrome.tabs.sendMessage(activeTab.id, { type: 'OMP_ANNOTATION_FLASH_SENT' }).catch(() => {});
-    flashButton(els.sendButton, 'Sent');
+    flashButton(button, response.queued ? 'Queued' : 'Sent');
     return;
   }
-  flashButton(els.sendButton, 'Failed');
+  flashButton(button, 'Failed');
   console.warn(response?.error || 'Send to OMP failed.');
 }
 
@@ -224,6 +235,7 @@ function render(rebuildList = true) {
   els.boxMode.classList.toggle('active', state.mode === 'box');
   els.count.textContent = String(state.annotations.length);
   els.sendButton.disabled = !state.annotations.length;
+  els.queueButton.disabled = !state.annotations.length;
   els.copyButton.disabled = !state.annotations.length;
   els.downloadButton.disabled = !state.annotations.length;
   els.clearButton.disabled = !state.annotations.length;
@@ -276,9 +288,14 @@ function renderAnnotation(annotation) {
   head.append(badge, titleWrap, del);
 
   const note = document.createElement('textarea');
+  note.className = 'annotation-note';
   note.placeholder = 'Add a note for the agent...';
   note.value = annotation.note || '';
+  note.rows = 1;
+  note.addEventListener('focus', () => resizePanelNote(note, true));
+  note.addEventListener('blur', () => resizePanelNote(note, false));
   note.addEventListener('input', () => {
+    resizePanelNote(note, true);
     clearTimeout(noteTimers.get(annotation.id));
     noteTimers.set(annotation.id, setTimeout(() => updateNote(annotation.id, note.value), 250));
   });
@@ -293,6 +310,7 @@ function renderAnnotation(annotation) {
   );
 
   card.append(head, note, details);
+  resizePanelNote(note, annotation.id === state.annotations.at(-1)?.id && Boolean(note.value));
   return card;
 }
 
@@ -313,6 +331,21 @@ function annotationTitle(annotation) {
   if (annotation.text) return annotation.text;
   if (annotation.tagName) return `<${annotation.tagName}>`;
   return annotation.kind === 'box' ? 'Visual region' : 'Element';
+}
+
+function resizePanelNote(note, expanded) {
+  if (!expanded) {
+    note.classList.remove('expanded');
+    note.style.height = '34px';
+    note.style.overflowY = 'hidden';
+    note.scrollTop = 0;
+    return;
+  }
+  note.classList.add('expanded');
+  note.style.height = 'auto';
+  const nextHeight = Math.min(note.scrollHeight, 180);
+  note.style.height = `${Math.max(34, nextHeight)}px`;
+  note.style.overflowY = note.scrollHeight > 180 ? 'auto' : 'hidden';
 }
 
 function detailLine(text) {

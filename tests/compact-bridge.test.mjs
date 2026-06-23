@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import bridge, { chunkTextForCmuxSend, formatAnnotationsForTargetedChat, materializeAnnotationScreenshots } from '../src/annotation-bridge.js';
+import bridge, { chunkTextForCmuxSend, cmuxSubmitKeyForDelivery, formatAnnotationsForTargetedChat, isQueuedDelivery, materializeAnnotationScreenshots } from '../src/annotation-bridge.js';
 
 const commands = new Map();
 const sent = [];
@@ -68,6 +68,9 @@ assert(!targeted.includes('TEST_IMAGE_BYTES'), 'targeted formatter should not in
 const chunks = chunkTextForCmuxSend(`prefix ${'x'.repeat(17000)} suffix`);
 assert(chunks.length === 3, `long targeted messages should be split into cmux-safe chunks, got ${chunks.length}`);
 assert(chunks.join('') === `prefix ${'x'.repeat(17000)} suffix`, 'chunking should preserve full image markdown payload');
+assert.equal(cmuxSubmitKeyForDelivery({ deliveryMode: 'queue' }), 'ctrl+enter', 'queued targeted delivery should submit with the OMP follow-up key');
+assert.equal(cmuxSubmitKeyForDelivery({}), 'enter', 'immediate targeted delivery should keep plain enter');
+assert.equal(isQueuedDelivery({ deliverAs: 'followUp' }), true, 'follow-up delivery alias should count as queued');
 const materialized = await materializeAnnotationScreenshots([{ screenshot: { mimeType: 'image/webp', dataUrl: 'data:image/webp;base64,VEVTVA==' } }]);
 assert(materialized[0].screenshot.filePath.startsWith('/tmp/omp-annotation-screenshots/annotation-'), 'materializer should write screenshot to a local file path');
 assert.equal(await readFile(materialized[0].screenshot.filePath, 'utf8'), 'TEST', 'materialized screenshot file should contain decoded bytes');

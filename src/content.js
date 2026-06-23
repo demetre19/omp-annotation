@@ -11,13 +11,15 @@
     isDragging: false,
     dragStart: null,
     editingNoteId: null,
-    noteTimers: new Map()
+    noteTimers: new Map(),
+    selectedElement: null,
+    navigationHistory: [],
+    annotationNavigationHistory: new Map()
   };
   const lifecycle = new AbortController();
   let disposed = false;
 
   const ui = createOverlay();
-  wireToolbar();
   wirePageEvents();
   chrome.runtime.sendMessage({ type: 'OMP_ANNOTATION_CONTENT_READY' }).catch(() => {});
 
@@ -76,23 +78,20 @@
     const style = document.createElement('style');
     style.textContent = `
       :host { all: initial; }
-      .bar { position: fixed; left: 6px; right: 6px; top: 6px; display: none; align-items: center; gap: 5px; height: 30px; padding: 3px 5px; border-radius: 10px; background: rgba(8,11,18,.88); color: #f5f7fb; font: 11px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow: 0 8px 26px rgba(0,0,0,.28); pointer-events: auto; border: 1px solid rgba(255,255,255,.12); backdrop-filter: blur(14px); }
-      .brand { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; white-space: nowrap; }
-      .dot { width: 7px; height: 7px; border-radius: 999px; background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.16); }
-      button { all: unset; display: inline-flex; align-items: center; justify-content: center; height: 22px; min-width: 22px; padding: 0 6px; border-radius: 7px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); color: #f5f7fb; cursor: pointer; white-space: nowrap; }
-      button:hover { border-color: rgba(245,158,11,.55); }
-      button.active { background: #f59e0b; color: #111827; font-weight: 800; }
-      .spacer { flex: 1 1 auto; }
-      .count { color: #fbbf24; font-weight: 800; min-width: 24px; text-align: right; }
       .outline { position: fixed; display: none; border: 2px solid #f59e0b; background: rgba(245,158,11,.12); border-radius: 6px; pointer-events: none; box-shadow: 0 0 0 99999px rgba(0,0,0,.12); }
       .outline.visible { display: block; }
+      .outline.selected { border-color: #38bdf8; background: rgba(56,189,248,.14); }
+      .target-label { position: fixed; display: none; max-width: min(520px, calc(100vw - 18px)); padding: 4px 7px; border-radius: 7px; background: rgba(8,11,18,.94); color: #f8fafc; border: 1px solid rgba(56,189,248,.5); font: 700 11px ui-sans-serif, system-ui; pointer-events: none; box-shadow: 0 8px 26px rgba(0,0,0,.28); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .target-label.visible { display: block; }
       .drag { position: fixed; display: none; border: 2px dashed #38bdf8; background: rgba(56,189,248,.14); border-radius: 6px; pointer-events: none; }
       .drag.visible { display: block; }
       .pin { position: fixed; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 999px; background: #f59e0b; color: #111827; font: 800 12px ui-sans-serif, system-ui; border: 2px solid #fff7ed; box-shadow: 0 8px 24px rgba(0,0,0,.3); pointer-events: auto; cursor: pointer; transform: translate(-50%, -50%); }
       .pin.sent { background: #22c55e; color: #052e16; }
       .box { position: fixed; border: 2px solid #f59e0b; background: rgba(245,158,11,.08); border-radius: 6px; pointer-events: none; }
-      .note { position: fixed; display: grid; grid-template-columns: 1fr; width: min(280px, calc(100vw - 24px)); padding: 3px 5px; border-radius: 999px; background: rgba(8,11,18,.94); border: 1px solid rgba(245,158,11,.65); box-shadow: 0 12px 34px rgba(0,0,0,.32); pointer-events: auto; }
-      .note textarea { all: unset; height: 18px; overflow: hidden; resize: none; padding: 1px 8px; color: #fff; font: 12px ui-sans-serif, system-ui; line-height: 18px; white-space: nowrap; }
+      .note { position: fixed; display: grid; grid-template-columns: 1fr; width: min(300px, calc(100vw - 24px)); padding: 6px 8px; border-radius: 8px; background: rgba(8,11,18,.94); border: 1px solid rgba(209,213,219,.62); box-shadow: 0 10px 28px rgba(0,0,0,.24); pointer-events: auto; }
+      .note:focus-within { border-color: rgba(229,231,235,.88); box-shadow: 0 10px 28px rgba(0,0,0,.24), 0 0 0 2px rgba(209,213,219,.16); }
+      .note textarea { all: unset; display: block; height: 18px; min-height: 18px; max-height: 150px; overflow: hidden; resize: none; padding: 0 2px; color: #f9fafb; font: 12px ui-sans-serif, system-ui; line-height: 18px; white-space: nowrap; text-overflow: ellipsis; }
+      .note.expanded textarea, .note textarea:focus { white-space: pre-wrap; overflow-wrap: anywhere; text-overflow: clip; }
       .note textarea::placeholder { color: #9ca3af; }
       .note-meta { display: none; }
       .sent-flash { position: fixed; inset: 0; background: #22c55e; opacity: 0; pointer-events: none; }
@@ -106,12 +105,11 @@
       .toast.visible { display: block; }
     `;
 
-    const bar = document.createElement('div');
-    bar.className = 'bar';
-    bar.innerHTML = '<span class="brand"><span class="dot"></span>Annotate</span><button data-mode="element" class="active" title="Element mode, Alt+Shift+E">E</button><button data-mode="box" title="Box mode, Alt+Shift+B">B</button><span class="spacer"></span><span class="count">0</span><button data-action="send">Send</button><button data-action="copy">Copy</button><button data-action="clear">Clear</button><button data-action="close">Esc</button>';
-
     const outline = document.createElement('div');
     outline.className = 'outline';
+
+    const targetLabel = document.createElement('div');
+    targetLabel.className = 'target-label';
     const drag = document.createElement('div');
     drag.className = 'drag';
     const layer = document.createElement('div');
@@ -120,43 +118,18 @@
     const toast = document.createElement('div');
     toast.className = 'toast';
 
-    shadow.append(style, bar, outline, drag, layer, sentFlash, toast);
+    shadow.append(style, outline, targetLabel, drag, layer, sentFlash, toast);
     return {
       root,
-      bar,
       outline,
+      targetLabel,
       drag,
       layer,
       sentFlash,
-      toast,
-      count: bar.querySelector('.count'),
-      modeButtons: Array.from(bar.querySelectorAll('[data-mode]'))
+      toast
     };
   }
 
-  function wireToolbar() {
-    ui.bar.addEventListener('click', (event) => {
-      stopEvent(event);
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
-      const modeButton = target.closest('[data-mode]');
-      if (modeButton) {
-        const mode = modeButton.dataset.mode === 'box' ? 'box' : 'element';
-        chrome.runtime.sendMessage({ type: 'OMP_ANNOTATION_SET_MODE', mode }).catch(() => setMode(mode));
-        setMode(mode);
-        return;
-      }
-      const actionButton = target.closest('[data-action]');
-      if (!actionButton) return;
-      const action = actionButton.dataset.action;
-      if (action === 'send') sendToOmp();
-      if (action === 'copy') copyAnnotations();
-      if (action === 'clear') clearAnnotations();
-      if (action === 'close') stopAnnotating();
-    }, { signal: lifecycle.signal });
-    ui.bar.addEventListener('mousedown', stopEvent, { capture: true, signal: lifecycle.signal });
-    ui.bar.addEventListener('mouseup', stopEvent, { capture: true, signal: lifecycle.signal });
-  }
 
   function syncState(next) {
     state.enabled = Boolean(next.enabled);
@@ -182,6 +155,7 @@
     ui.layer.textContent = '';
     ui.outline.classList.remove('visible');
     ui.drag.classList.remove('visible');
+    clearTargetSelection();
   }
 
   function disposeOverlay() {
@@ -201,6 +175,7 @@
 
   function setMode(mode) {
     state.mode = mode;
+    if (mode === 'box') clearTargetSelection();
     updateToolbar();
   }
 
@@ -217,15 +192,13 @@
   }
 
   function updateToolbar() {
-    ui.bar.style.display = state.enabled ? 'flex' : 'none';
-    ui.count.textContent = String(state.annotations.length);
-    for (const button of ui.modeButtons) button.classList.toggle('active', button.dataset.mode === state.mode);
     document.documentElement.style.cursor = state.enabled ? 'crosshair' : '';
     if (!state.enabled) clearOverlay();
   }
 
   function wirePageEvents() {
     const handleShortcut = (event) => {
+      if (event.type === 'keydown' && state.enabled && state.mode === 'element' && handleTargetNavigation(event)) return;
       if (event.key === 'Escape' && state.enabled) {
         stopAnnotating();
         stopEvent(event);
@@ -249,12 +222,13 @@
         stopEvent(event);
         return;
       }
-      if (state.mode === 'element') drawHover(inspectElementAt(event.clientX, event.clientY));
+      if (state.mode === 'element' && !state.selectedElement) drawTarget(inspectElementAt(event.clientX, event.clientY), false);
     }, captureOptions);
 
     document.addEventListener('mousedown', (event) => {
       if (!state.enabled || event.button !== 0 || isOverlayEvent(event)) return;
       if (event.shiftKey || state.mode === 'box') {
+        clearTargetSelection();
         state.isDragging = true;
         state.dragStart = { x: event.clientX, y: event.clientY };
         updateDrag(event.clientX, event.clientY);
@@ -278,16 +252,16 @@
       if (!state.enabled || state.mode !== 'element' || event.shiftKey || isOverlayEvent(event)) return;
       const element = inspectElementAt(event.clientX, event.clientY);
       if (!element) return;
-      captureElement(element);
+      selectTargetElement(element);
       stopEvent(event);
     }, captureOptions);
 
-    window.addEventListener('scroll', drawAnnotations, { passive: true, signal: lifecycle.signal });
-    window.addEventListener('resize', drawAnnotations, { passive: true, signal: lifecycle.signal });
+    window.addEventListener('scroll', () => { drawAnnotations(); redrawSelectedTarget(); }, { passive: true, signal: lifecycle.signal });
+    window.addEventListener('resize', () => { drawAnnotations(); redrawSelectedTarget(); }, { passive: true, signal: lifecycle.signal });
   }
 
   function isOverlayEvent(event) {
-    return event.composedPath().includes(ui.bar) || event.composedPath().includes(ui.layer);
+    return event.composedPath().includes(ui.layer);
   }
 
   function inspectElementAt(x, y) {
@@ -297,18 +271,126 @@
     return element;
   }
 
-  function drawHover(element) {
+  function handleTargetNavigation(event) {
+    if (isTypingTarget(event.target)) return false;
+    if (!state.selectedElement || !state.selectedElement.isConnected) return false;
+    const element = state.selectedElement;
+    if (event.key === 'Enter') {
+      stopEvent(event);
+      captureElement(element);
+      clearTargetSelection();
+      return true;
+    }
+    if (event.key === 'ArrowUp') {
+      stopEvent(event);
+      const parent = navigableParent(element);
+      if (parent) {
+        state.navigationHistory.push(element);
+        selectTargetElement(parent, false);
+      }
+      return true;
+    }
+    if (event.key === 'ArrowDown') {
+      stopEvent(event);
+      const previous = state.navigationHistory.pop();
+      if (previous?.isConnected && previous.parentElement === element) {
+        selectTargetElement(previous, false);
+        return true;
+      }
+      const child = firstNavigableChild(element);
+      if (child) selectTargetElement(child, false);
+      return true;
+    }
+    if (event.key === 'ArrowLeft') {
+      stopEvent(event);
+      const sibling = navigableSibling(element, -1);
+      if (sibling) selectTargetElement(sibling, false);
+      return true;
+    }
+    if (event.key === 'ArrowRight') {
+      stopEvent(event);
+      const sibling = navigableSibling(element, 1);
+      if (sibling) selectTargetElement(sibling, false);
+      return true;
+    }
+    return false;
+  }
+
+  function selectTargetElement(element, resetHistory = true) {
+    if (!isNavigableElement(element)) return;
+    state.selectedElement = element;
+    if (resetHistory) state.navigationHistory = [];
+    drawTarget(element, true);
+  }
+
+  function clearTargetSelection() {
+    state.selectedElement = null;
+    state.navigationHistory = [];
+    ui.outline.classList.remove('visible', 'selected');
+    ui.targetLabel.classList.remove('visible');
+  }
+
+  function redrawSelectedTarget() {
+    if (!state.selectedElement || !state.selectedElement.isConnected) return;
+    drawTarget(state.selectedElement, true);
+  }
+
+  function navigableParent(element) {
+    const parent = element.parentElement;
+    return isNavigableElement(parent) ? parent : null;
+  }
+
+  function firstNavigableChild(element) {
+    return Array.from(element.children || []).find(isNavigableElement) || null;
+  }
+
+  function navigableSibling(element, direction) {
+    const siblings = Array.from(element.parentElement?.children || []).filter(isNavigableElement);
+    const index = siblings.indexOf(element);
+    if (index < 0) return null;
+    return siblings[index + direction] || null;
+  }
+
+  function isNavigableElement(element) {
+    if (!(element instanceof Element)) return false;
+    if (element === document.documentElement || element === document.body) return false;
+    if (ui.root.contains(element)) return false;
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function isTypingTarget(target) {
+    if (!(target instanceof Element)) return false;
+    const tag = target.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+  }
+
+  function drawTarget(element, selected) {
     if (!element) {
-      ui.outline.classList.remove('visible');
+      ui.outline.classList.remove('visible', 'selected');
+      ui.targetLabel.classList.remove('visible');
       return;
     }
     const rect = element.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) {
-      ui.outline.classList.remove('visible');
+      ui.outline.classList.remove('visible', 'selected');
+      ui.targetLabel.classList.remove('visible');
       return;
     }
     setRect(ui.outline, rect.left, rect.top, rect.width, rect.height);
+    ui.outline.classList.toggle('selected', Boolean(selected));
     ui.outline.classList.add('visible');
+    drawTargetLabel(element, rect, selected);
+  }
+
+  function drawTargetLabel(element, rect, selected) {
+    ui.targetLabel.textContent = selected
+      ? `${shortSelector(element)}  ↑ parent  ↓ child  ←/→ sibling  Enter capture`
+      : shortSelector(element);
+    const top = rect.top > 34 ? rect.top - 28 : rect.bottom + 6;
+    ui.targetLabel.style.top = `${Math.round(Math.max(6, Math.min(window.innerHeight - 28, top)))}px`;
+    ui.targetLabel.style.left = `${Math.round(Math.max(6, Math.min(window.innerWidth - 16, rect.left)))}px`;
+    ui.targetLabel.classList.add('visible');
   }
 
   function updateDrag(x, y) {
@@ -318,8 +400,13 @@
   }
 
   function captureElement(element) {
+    addAnnotation(annotationFromElement(element));
+  }
+
+  function annotationFromElement(element, base = {}) {
     const rect = element.getBoundingClientRect();
-    addAnnotation({
+    return {
+      ...base,
       kind: 'element',
       url: location.href,
       frameUrl: location.href,
@@ -336,8 +423,8 @@
       bbox: toBox(rect),
       viewport: viewport(),
       scroll: scrollPosition(),
-      capturedAt: new Date().toISOString()
-    });
+      capturedAt: base.capturedAt || new Date().toISOString()
+    };
   }
 
   function captureBox(box) {
@@ -364,6 +451,7 @@
     chrome.runtime.sendMessage({ type: 'OMP_ANNOTATION_ADDED', annotation }).then((response) => {
       if (response?.annotation) {
         state.annotations = state.annotations.concat(response.annotation);
+        state.editingNoteId = response.annotation.id;
         drawAnnotations();
         updateToolbar();
         focusInlineNote(response.annotation.id);
@@ -407,10 +495,10 @@
     if (annotation.sentAt && state.editingNoteId !== annotation.id) return;
 
     const note = document.createElement('label');
-    note.className = 'note';
+    note.className = state.editingNoteId === annotation.id ? 'note expanded' : 'note';
     note.dataset.annotationId = annotation.id;
     const top = Math.max(44, Math.min(window.innerHeight - 80, y + 28));
-    const left = Math.max(8, Math.min(window.innerWidth - 288, x));
+    const left = Math.max(8, Math.min(window.innerWidth - 308, x));
     note.style.left = `${Math.round(left)}px`;
     note.style.top = `${Math.round(top)}px`;
 
@@ -420,41 +508,151 @@
     const textarea = document.createElement('textarea');
     textarea.placeholder = 'Add a comment…';
     textarea.value = annotation.note || '';
-    textarea.addEventListener('focus', () => { state.editingNoteId = annotation.id; });
-    textarea.addEventListener('blur', () => { if (!annotation.sentAt) state.editingNoteId = null; });
-    textarea.addEventListener('input', () => updateInlineNote(annotation.id, textarea.value));
+    textarea.rows = 1;
+    textarea.addEventListener('focus', () => {
+      state.editingNoteId = annotation.id;
+      note.classList.add('expanded');
+      resizeInlineNote(textarea, true);
+    });
+    textarea.addEventListener('blur', () => {
+      if (!annotation.sentAt) state.editingNoteId = null;
+      note.classList.remove('expanded');
+      resizeInlineNote(textarea, false);
+    });
+    textarea.addEventListener('input', () => {
+      updateInlineNote(annotation.id, textarea.value);
+      resizeInlineNote(textarea, true);
+    });
     textarea.addEventListener('keydown', (event) => handleNoteKeydown(event, annotation.id, textarea));
     note.append(meta, textarea);
     ui.layer.appendChild(note);
+    resizeInlineNote(textarea, state.editingNoteId === annotation.id);
   }
 
   function focusInlineNote(id) {
     const textarea = ui.layer.querySelector(`[data-annotation-id="${cssString(id)}"] textarea`);
-    if (textarea) textarea.focus();
+    if (!textarea) return;
+    textarea.focus();
+    resizeInlineNote(textarea, true);
+  }
+
+  function resizeInlineNote(textarea, expanded) {
+    if (!expanded) {
+      textarea.style.height = '18px';
+      textarea.style.overflowY = 'hidden';
+      textarea.scrollTop = 0;
+      return;
+    }
+    textarea.style.height = 'auto';
+    const nextHeight = Math.min(textarea.scrollHeight, 150);
+    textarea.style.height = `${Math.max(18, nextHeight)}px`;
+    textarea.style.overflowY = textarea.scrollHeight > 150 ? 'auto' : 'hidden';
   }
 
   function handleNoteKeydown(event, id, textarea) {
+    if (isModifierArrow(event)) {
+      stopEvent(event);
+      retargetInlineAnnotation(id, event.key, textarea.value);
+      return;
+    }
     if (event.key !== 'Enter') return;
     if (event.shiftKey) return;
-    if (event.metaKey || event.ctrlKey) {
+    if (event.metaKey || event.ctrlKey || event.altKey) {
       stopEvent(event);
-      sendInlineNote(id, textarea.value);
+      sendInlineNote(id, textarea.value, 'queue');
       return;
     }
     stopEvent(event);
   }
 
-  function sendInlineNote(id, note) {
+  function isModifierArrow(event) {
+    return (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key);
+  }
+
+  function retargetInlineAnnotation(id, key, note) {
+    const annotation = state.annotations.find((item) => item.id === id);
+    if (!annotation || annotation.kind !== 'element') return;
+    const current = elementForAnnotation(annotation);
+    if (!current) {
+      showToast('Could not find selected element on the page.');
+      return;
+    }
+    const next = navigatedElementForAnnotation(id, current, key);
+    if (!next) return;
+    const updated = annotationFromElement(next, { ...annotation, note });
+    delete updated.sentAt;
+    state.annotations = state.annotations.map((item) => item.id === id ? updated : item);
+    chrome.runtime.sendMessage({ type: 'OMP_ANNOTATION_UPDATE_ELEMENT', id, annotation: updated }).catch(() => {});
+    state.editingNoteId = id;
+    drawAnnotations();
+    updateToolbar();
+    focusInlineNote(id);
+    showToast(`Target: ${shortSelector(next)}`);
+  }
+
+  function navigatedElementForAnnotation(id, current, key) {
+    if (key === 'ArrowUp') {
+      const parent = navigableParent(current);
+      if (parent) {
+        pushAnnotationHistory(id, current);
+        return parent;
+      }
+      return null;
+    }
+    if (key === 'ArrowDown') {
+      const previous = popAnnotationHistory(id);
+      if (previous?.isConnected && previous.parentElement === current) return previous;
+      return firstNavigableChild(current);
+    }
+    if (key === 'ArrowLeft') return navigableSibling(current, -1);
+    if (key === 'ArrowRight') return navigableSibling(current, 1);
+    return null;
+  }
+
+  function pushAnnotationHistory(id, element) {
+    const history = state.annotationNavigationHistory.get(id) || [];
+    history.push(element);
+    state.annotationNavigationHistory.set(id, history);
+  }
+
+  function popAnnotationHistory(id) {
+    const history = state.annotationNavigationHistory.get(id) || [];
+    const element = history.pop() || null;
+    if (history.length) state.annotationNavigationHistory.set(id, history);
+    else state.annotationNavigationHistory.delete(id);
+    return element;
+  }
+
+  function elementForAnnotation(annotation) {
+    const selector = annotation.selector;
+    if (selector) {
+      try {
+        const element = document.querySelector(selector);
+        if (isNavigableElement(element)) return element;
+      } catch (_) {}
+    }
+    const xpath = annotation.xpath;
+    if (xpath) {
+      try {
+        const element = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        if (isNavigableElement(element)) return element;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  function sendInlineNote(id, note, deliveryMode = 'send') {
     updateInlineNote(id, note, true);
     const item = state.annotations.find((annotation) => annotation.id === id);
     if (item) item.sentAt = new Date().toISOString();
-    chrome.runtime.sendMessage({ type: 'OMP_ANNOTATION_SEND_ONE_TO_OMP', id, note }).then((response) => {
+    chrome.runtime.sendMessage({ type: 'OMP_ANNOTATION_SEND_ONE_TO_OMP', id, note, deliveryMode }).then((response) => {
       if (response?.state) state.annotations = response.state.annotations || state.annotations;
       state.editingNoteId = null;
       drawAnnotations();
       updateToolbar();
       if (response?.ok) flashSent();
-      showToast(response?.ok ? 'Sent to OMP.' : (response?.error || 'Send failed.'));
+      const successText = response?.queued ? 'Queued in OMP.' : 'Sent to OMP.';
+      showToast(response?.ok ? successText : (response?.error || 'Send failed.'));
     }).catch((error) => showToast(String(error?.message || error || 'Send failed.')));
   }
 
@@ -603,6 +801,19 @@
   function compactDomText(value, max) {
     const text = String(value || '').replace(/\s+/g, ' ').trim();
     return text.length > max ? `${text.slice(0, max - 1)}…` : text || null;
+  }
+
+  function shortSelector(element) {
+    if (!(element instanceof Element)) return '';
+    const tag = element.tagName.toLowerCase();
+    const id = element.id ? `#${element.id}` : '';
+    const classes = Array.from(element.classList || [])
+      .filter((name) => /^[a-zA-Z0-9_-]+$/.test(name))
+      .slice(0, 3)
+      .map((name) => `.${name}`)
+      .join('');
+    const selector = `${tag}${id}${classes}` || tag;
+    return selector.length > 70 ? `${selector.slice(0, 69)}…` : selector;
   }
 
   function buildSelector(element) {

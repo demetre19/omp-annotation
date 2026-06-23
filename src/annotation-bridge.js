@@ -112,14 +112,16 @@ async function deliverAnnotations(body) {
   if (body?.token !== bridgeToken) return { ok: false, status: 403, error: 'Invalid bridge token.' };
   const annotations = normalizeAnnotations(body);
   if (!annotations.length) return { ok: false, status: 400, error: 'No annotations to send.' };
+  const queued = isQueuedDelivery(body);
   if (body?.target?.surface_ref || body?.target?.surface_id) {
     await deliverAnnotationsToCmuxTarget(body, annotations);
-    return { ok: true, delivered: annotations.length, target: body.target };
+    return { ok: true, delivered: annotations.length, target: body.target, queued };
   }
   if (!activePi || !activeCtx) return { ok: false, status: 409, error: 'No active OMP session.' };
   const message = formatAnnotationsForChat(body, annotations);
-  await activePi.sendUserMessage(message, { deliverAs: 'nextTurn', triggerTurn: true });
-  return { ok: true, delivered: annotations.length };
+  const options = queued ? { deliverAs: 'followUp' } : { deliverAs: 'nextTurn', triggerTurn: true };
+  await activePi.sendUserMessage(message, options);
+  return { ok: true, delivered: annotations.length, queued };
 }
 
 async function deliverAnnotationsToCmuxTarget(body, annotations) {
@@ -135,10 +137,19 @@ async function deliverAnnotationsToCmuxTarget(body, annotations) {
     sendArgs.push('--surface', surface, chunk);
     await runCmux(sendArgs);
   }
+  const submitKey = cmuxSubmitKeyForDelivery(body);
   const enterArgs = ['send-key'];
   if (workspace) enterArgs.push('--workspace', workspace);
-  enterArgs.push('--surface', surface, 'enter');
+  enterArgs.push('--surface', surface, submitKey);
   await runCmux(enterArgs);
+}
+
+export function cmuxSubmitKeyForDelivery(body) {
+  return isQueuedDelivery(body) ? 'ctrl+enter' : 'enter';
+}
+
+export function isQueuedDelivery(body) {
+  return body?.deliveryMode === 'queue' || body?.deliverAs === 'followUp' || body?.delivery === 'queue';
 }
 
 export function chunkTextForCmuxSend(text, size = CMUX_SEND_CHUNK_SIZE) {

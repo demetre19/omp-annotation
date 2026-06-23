@@ -21,6 +21,8 @@ if (!headless && process.env.FOREGROUND !== 'true') {
 
 let context;
 let server;
+let bridgeServer;
+const bridgeRequests = [];
 try {
   server = await startFixtureServer();
   const pageUrl = `http://127.0.0.1:${server.address().port}/page.html`;
@@ -57,6 +59,7 @@ try {
   await seoLink.waitFor();
   assert(await seoLink.textContent() === 'SEO Time Machines', 'side panel footer should link SEO Time Machines');
   assert(await seoLink.getAttribute('href') === 'https://seotimemachines.com/', 'SEO Time Machines footer link should point to the site');
+  assert(await panel.locator('#queueButton').textContent() === 'Queue', 'side panel should expose a queue action');
   const send = (message) => panel.evaluate((payload) => chrome.runtime.sendMessage(payload), message);
   const commands = await worker.evaluate(() => chrome.commands.getAll());
   assert(commands.some((command) => command.name === 'toggle-annotating' && command.shortcut), 'toggle shortcut should be registered');
@@ -81,6 +84,13 @@ try {
   await pressModeToggle(page);
   await waitForMode(send, tab.id, 'element');
   await page.locator('#cta').click({ force: true });
+  await page.keyboard.press('ArrowUp');
+  const parentTargetLabel = await targetLabelText(page);
+  assert(parentTargetLabel.includes('section'), `ArrowUp should target the parent element, got ${parentTargetLabel}`);
+  await page.keyboard.press('ArrowDown');
+  const childTargetLabel = await targetLabelText(page);
+  assert(childTargetLabel.includes('button#cta'), `ArrowDown should return to the child element, got ${childTargetLabel}`);
+  await page.keyboard.press('Enter');
 
   await waitForAnnotationCount(send, tab.id, 1);
 
@@ -98,21 +108,62 @@ try {
   assert(annotation.context?.parent?.selector === 'section[data-testid="hero-card"]', `expected parent context selector, got ${annotation.context?.parent?.selector}`);
   assert(annotation.context?.previous?.html?.includes('<p>Start here'), 'annotation should include previous sibling HTML context');
 
+  const longNote = 'Make this play button more obvious and explain that the copied target should remain readable even when the annotation text is long enough to wrap across several visible lines.';
   await page.evaluate(() => {
     const textarea = document.querySelector('#omp-annotation-root').shadowRoot.querySelector('.note textarea');
     textarea.focus();
   });
-  await page.keyboard.type('Make this play button more obvious.');
-  await waitForAnnotationNote(send, tab.id, annotation.id, 'Make this play button more obvious.');
+  await page.keyboard.down('Meta');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.up('Meta');
+  await waitForAnnotationSelector(send, tab.id, annotation.id, 'section[data-testid="hero-card"]');
+  await page.keyboard.down('Meta');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.up('Meta');
+  await waitForAnnotationSelector(send, tab.id, annotation.id, '#cta');
+  await page.keyboard.type(longNote);
+  await waitForAnnotationNote(send, tab.id, annotation.id, longNote);
+  const expandedInline = await page.evaluate(() => {
+    const note = document.querySelector('#omp-annotation-root').shadowRoot.querySelector('.note');
+    const textarea = note.querySelector('textarea');
+    const noteStyle = getComputedStyle(note);
+    return {
+      height: textarea.getBoundingClientRect().height,
+      collapsedClass: note.classList.contains('expanded'),
+      borderRadius: noteStyle.borderRadius,
+      borderColor: noteStyle.borderColor,
+      backgroundColor: noteStyle.backgroundColor
+    };
+  });
+  assert(expandedInline.height > 18, `inline note should expand beyond one line, got ${expandedInline.height}`);
+  assert(expandedInline.collapsedClass, 'focused inline note should be marked expanded');
+  assert(expandedInline.borderRadius === '8px', `inline note should have 8px radius, got ${expandedInline.borderRadius}`);
+  assert(!expandedInline.borderColor.includes('245, 158, 11'), `inline note border should not be orange, got ${expandedInline.borderColor}`);
+  assert(expandedInline.backgroundColor.includes('8, 11, 18'), `inline note should stay dark, got ${expandedInline.backgroundColor}`);
   const focusedInline = await page.evaluate(() => document.querySelector('#omp-annotation-root').shadowRoot.activeElement?.tagName === 'TEXTAREA');
   assert(focusedInline, 'inline note textarea should keep focus while typing');
 
   await page.locator('header h1').click({ force: true });
+  await page.keyboard.press('Enter');
   await waitForAnnotationCount(send, tab.id, 2);
   const withHeading = await send({ type: 'OMP_ANNOTATION_GET_STATE', tabId: tab.id }).then((response) => response.state);
   const heading = withHeading.annotations[1];
   assert(heading.selector === 'header > h1', `heading selector should include parent specificity, got ${heading.selector}`);
   assert(heading.context?.previous?.html?.includes('stm-pv-kicker'), 'heading context should include the preceding kicker HTML');
+  const collapsedAfterSecondAnnotation = await page.evaluate(() => {
+    const notes = [...document.querySelector('#omp-annotation-root').shadowRoot.querySelectorAll('.note')];
+    const firstTextarea = notes[0]?.querySelector('textarea');
+    return {
+      noteCount: notes.length,
+      firstHeight: firstTextarea?.getBoundingClientRect().height || 0,
+      firstExpanded: notes[0]?.classList.contains('expanded') || false,
+      secondExpanded: notes[1]?.classList.contains('expanded') || false
+    };
+  });
+  assert(collapsedAfterSecondAnnotation.noteCount === 2, `expected two visible inline notes, got ${collapsedAfterSecondAnnotation.noteCount}`);
+  assert(collapsedAfterSecondAnnotation.firstHeight === 18, `previous inline note should collapse to one line after a nearby annotation, got ${collapsedAfterSecondAnnotation.firstHeight}`);
+  assert(!collapsedAfterSecondAnnotation.firstExpanded, 'previous inline note should no longer be marked expanded');
+  assert(collapsedAfterSecondAnnotation.secondExpanded, 'new inline note should be the expanded note');
 
   await send({ type: 'OMP_ANNOTATION_SET_MODE', tabId: tab.id, mode: 'box' });
   const modeState = await send({ type: 'OMP_ANNOTATION_GET_STATE', tabId: tab.id }).then((response) => response.state);
@@ -139,6 +190,16 @@ try {
   const renderedCount = await panel.locator('#count').textContent();
   assert(renderedCount === '3', `side panel should render three annotations, got ${renderedCount}`);
   assert(await panel.locator('.details').first().textContent().then((text) => text.includes(`Viewport: ${viewport.width} x ${viewport.height}`)), 'side panel should render viewport dimensions');
+  bridgeServer = await startBridgeServer(bridgeRequests);
+  await worker.evaluate((port) => chrome.storage.local.set({
+    ompAnnotationBridge: { ok: true, port, token: 'test-token', version: 2 }
+  }), bridgeServer.address().port);
+  await panel.locator('#queueButton').click();
+  const queueRequest = await waitForBridgeRequest(bridgeRequests);
+  assert(queueRequest.deliveryMode === 'queue', `queue button should request queued delivery, got ${queueRequest.deliveryMode}`);
+  assert(queueRequest.token === 'test-token', 'queue delivery should use the cached bridge token');
+  assert(queueRequest.annotations.length === 3, `queue delivery should send all annotations, got ${queueRequest.annotations.length}`);
+
 
   await send({ type: 'OMP_ANNOTATION_CLEAR', tabId: tab.id });
   const cleared = await send({ type: 'OMP_ANNOTATION_GET_STATE', tabId: tab.id }).then((response) => response.state);
@@ -149,6 +210,7 @@ try {
 } finally {
   if (context) await context.close();
   if (server) await new Promise((resolve) => server.close(resolve));
+  if (bridgeServer) await new Promise((resolve) => bridgeServer.close(resolve));
   await rm(userDataDir, { recursive: true, force: true });
 }
 
@@ -215,6 +277,13 @@ async function pressModeToggle(page) {
   await page.keyboard.up('Alt');
 }
 
+async function targetLabelText(page) {
+  return page.evaluate(() => {
+    const root = document.querySelector('#omp-annotation-root');
+    return root?.shadowRoot?.querySelector('.target-label')?.textContent || '';
+  });
+}
+
 async function waitForAnnotationNote(send, tabId, id, note) {
   const deadline = Date.now() + 5000;
   while (Date.now() < deadline) {
@@ -224,6 +293,17 @@ async function waitForAnnotationNote(send, tabId, id, note) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error('inline note did not persist');
+}
+
+async function waitForAnnotationSelector(send, tabId, id, selector) {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    const state = await send({ type: 'OMP_ANNOTATION_GET_STATE', tabId }).then((response) => response.state);
+    const annotation = state.annotations.find((item) => item.id === id);
+    if (annotation?.selector === selector) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`annotation did not retarget to ${selector}`);
 }
 
 
@@ -240,6 +320,46 @@ async function startFixtureServer() {
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   return server;
+}
+
+async function startBridgeServer(requests) {
+  const server = createServer((request, response) => {
+    if (request.method === 'GET' && request.url === '/v1/status') {
+      sendJson(response, 200, { ok: true, bridge: 'omp-annotation-bridge', version: 2, token: 'test-token' });
+      return;
+    }
+    if (request.method === 'POST' && request.url === '/v1/annotations') {
+      let raw = '';
+      request.setEncoding('utf8');
+      request.on('data', (chunk) => { raw += chunk; });
+      request.on('end', () => {
+        const body = JSON.parse(raw || '{}');
+        requests.push(body);
+        sendJson(response, 200, { ok: true, delivered: body.annotations?.length || 0, queued: body.deliveryMode === 'queue' });
+      });
+      return;
+    }
+    sendJson(response, 404, { ok: false, error: 'not found' });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  return server;
+}
+
+function sendJson(response, status, data) {
+  response.writeHead(status, {
+    'access-control-allow-origin': '*',
+    'content-type': 'application/json'
+  });
+  response.end(JSON.stringify(data));
+}
+
+async function waitForBridgeRequest(requests) {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    if (requests.length) return requests[0];
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error('queue delivery did not reach the bridge');
 }
 
 function assert(condition, message) {
